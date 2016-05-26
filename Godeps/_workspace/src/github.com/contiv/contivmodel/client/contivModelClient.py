@@ -146,6 +146,7 @@ class objmodelClient:
 
 	    jdata = json.dumps({ 
 			"groupName": obj.groupName, 
+			"netProfile": obj.netProfile, 
 			"networkName": obj.networkName, 
 			"policies": obj.policies, 
 			"tenantName": obj.tenantName, 
@@ -206,6 +207,40 @@ class objmodelClient:
 	    retDate = urllib2.urlopen(self.baseUrl + '/api/globals/')
 	    if retData == "Error":
 	        errorExit("list Global failed")
+
+	    return json.loads(retData)
+	# Create netProfile
+	def createNetProfile(self, obj):
+	    postUrl = self.baseUrl + '/api/netProfiles/' + obj.tenantName + ":" + obj.profileName  + '/'
+
+	    jdata = json.dumps({ 
+			"DSCP": obj.DSCP, 
+			"bandwidth": obj.bandwidth, 
+			"profileName": obj.profileName, 
+			"tenantName": obj.tenantName, 
+	    })
+
+	    # Post the data
+	    response = httpPost(postUrl, jdata)
+
+	    if response == "Error":
+	        errorExit("NetProfile create failure")
+
+	# Delete netProfile
+	def deleteNetProfile(self, tenantName, profileName):
+	    # Delete NetProfile
+	    deleteUrl = self.baseUrl + '/api/netProfiles/' + tenantName + ":" + profileName  + '/'
+	    response = httpDelete(deleteUrl)
+
+	    if response == "Error":
+	        errorExit("NetProfile create failure")
+
+	# List all netProfile objects
+	def listNetProfile(self):
+	    # Get a list of netProfile objects
+	    retDate = urllib2.urlopen(self.baseUrl + '/api/netProfiles/')
+	    if retData == "Error":
+	        errorExit("list NetProfile failed")
 
 	    return json.loads(retData)
 	# Create network

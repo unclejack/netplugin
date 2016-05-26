@@ -24,6 +24,7 @@ import (
 
 	"github.com/contiv/netplugin/core"
 	"github.com/contiv/netplugin/netmaster/mastercfg"
+	"github.com/contiv/netplugin/traffic"
 	"github.com/contiv/netplugin/utils/netutils"
 	"github.com/contiv/ofnet"
 
@@ -334,6 +335,11 @@ func (sw *OvsSwitch) CreatePort(intfName string, cfgEp *mastercfg.CfgEndpointSta
 		log.Errorf("Error adding local port %s to ofnet. Err: %v", ovsPortName, err)
 		return err
 	}
+	err = traffic.SetUpBandwidthShaping(ovsPortName, 1000000)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 

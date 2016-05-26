@@ -32,6 +32,9 @@
 				"policies": {
 					"ref": "policy"
 				},
+				"netProfiles": {
+					"ref": "netProfile"
+				},
 				"volumes": {
 					"ref": "volume"
 				},

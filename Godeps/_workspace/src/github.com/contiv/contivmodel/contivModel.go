@@ -53,6 +53,7 @@ type EndpointGroup struct {
 	Key string `json:"key,omitempty"`
 
 	GroupName   string   `json:"groupName,omitempty"`   // Group name
+	NetProfile  string   `json:"netProfile,omitempty"`  // Network profile name
 	NetworkName string   `json:"networkName,omitempty"` // Network
 	Policies    []string `json:"policies,omitempty"`
 	TenantName  string   `json:"tenantName,omitempty"` // Tenant
@@ -82,6 +83,28 @@ type Global struct {
 	Vlans            string `json:"vlans,omitempty"`            // Allowed vlan range
 	Vxlans           string `json:"vxlans,omitempty"`           // Allwed vxlan range
 
+}
+
+type NetProfile struct {
+	// every object has a key
+	Key string `json:"key,omitempty"`
+
+	DSCP        int    `json:"DSCP,omitempty"`        // DSCP
+	Bandwidth   string `json:"bandwidth,omitempty"`   // Allocated Bandwidth
+	ProfileName string `json:"profileName,omitempty"` // Network profile name
+	TenantName  string `json:"tenantName,omitempty"`  // Tenant Name
+
+	// add link-sets and links
+	LinkSets NetProfileLinkSets `json:"link-sets,omitempty"`
+	Links    NetProfileLinks    `json:"links,omitempty"`
+}
+
+type NetProfileLinkSets struct {
+	EndpointGroups map[string]modeldb.Link `json:"EndpointGroups,omitempty"`
+}
+
+type NetProfileLinks struct {
+	Tenant modeldb.Link `json:"Tenant,omitempty"`
 }
 
 type Network struct {
@@ -194,6 +217,7 @@ type Tenant struct {
 type TenantLinkSets struct {
 	AppProfiles    map[string]modeldb.Link `json:"AppProfiles,omitempty"`
 	EndpointGroups map[string]modeldb.Link `json:"EndpointGroups,omitempty"`
+	NetProfiles    map[string]modeldb.Link `json:"NetProfiles,omitempty"`
 	Networks       map[string]modeldb.Link `json:"Networks,omitempty"`
 	Policies       map[string]modeldb.Link `json:"Policies,omitempty"`
 	Servicelbs     map[string]modeldb.Link `json:"Servicelbs,omitempty"`
@@ -254,6 +278,7 @@ type Collections struct {
 	Bgps           map[string]*Bgp
 	endpointGroups map[string]*EndpointGroup
 	globals        map[string]*Global
+	netProfiles    map[string]*NetProfile
 	networks       map[string]*Network
 	policys        map[string]*Policy
 	rules          map[string]*Rule
@@ -287,6 +312,12 @@ type GlobalCallbacks interface {
 	GlobalCreate(global *Global) error
 	GlobalUpdate(global, params *Global) error
 	GlobalDelete(global *Global) error
+}
+
+type NetProfileCallbacks interface {
+	NetProfileCreate(netProfile *NetProfile) error
+	NetProfileUpdate(netProfile, params *NetProfile) error
+	NetProfileDelete(netProfile *NetProfile) error
 }
 
 type NetworkCallbacks interface {
@@ -336,6 +367,7 @@ type CallbackHandlers struct {
 	BgpCb           BgpCallbacks
 	EndpointGroupCb EndpointGroupCallbacks
 	GlobalCb        GlobalCallbacks
+	NetProfileCb    NetProfileCallbacks
 	NetworkCb       NetworkCallbacks
 	PolicyCb        PolicyCallbacks
 	RuleCb          RuleCallbacks
@@ -352,6 +384,7 @@ func Init() {
 	collections.Bgps = make(map[string]*Bgp)
 	collections.endpointGroups = make(map[string]*EndpointGroup)
 	collections.globals = make(map[string]*Global)
+	collections.netProfiles = make(map[string]*NetProfile)
 	collections.networks = make(map[string]*Network)
 	collections.policys = make(map[string]*Policy)
 	collections.rules = make(map[string]*Rule)
@@ -364,6 +397,7 @@ func Init() {
 	restoreBgp()
 	restoreEndpointGroup()
 	restoreGlobal()
+	restoreNetProfile()
 	restoreNetwork()
 	restorePolicy()
 	restoreRule()
@@ -388,6 +422,10 @@ func RegisterEndpointGroupCallbacks(handler EndpointGroupCallbacks) {
 
 func RegisterGlobalCallbacks(handler GlobalCallbacks) {
 	objCallbackHandler.GlobalCb = handler
+}
+
+func RegisterNetProfileCallbacks(handler NetProfileCallbacks) {
+	objCallbackHandler.NetProfileCb = handler
 }
 
 func RegisterNetworkCallbacks(handler NetworkCallbacks) {
@@ -496,6 +534,16 @@ func AddRoutes(router *mux.Router) {
 	router.Path(route).Methods("POST").HandlerFunc(makeHttpHandler(httpCreateGlobal))
 	router.Path(route).Methods("PUT").HandlerFunc(makeHttpHandler(httpCreateGlobal))
 	router.Path(route).Methods("DELETE").HandlerFunc(makeHttpHandler(httpDeleteGlobal))
+
+	// Register netProfile
+	route = "/api/netProfiles/{key}/"
+	listRoute = "/api/netProfiles/"
+	log.Infof("Registering %s", route)
+	router.Path(listRoute).Methods("GET").HandlerFunc(makeHttpHandler(httpListNetProfiles))
+	router.Path(route).Methods("GET").HandlerFunc(makeHttpHandler(httpGetNetProfile))
+	router.Path(route).Methods("POST").HandlerFunc(makeHttpHandler(httpCreateNetProfile))
+	router.Path(route).Methods("PUT").HandlerFunc(makeHttpHandler(httpCreateNetProfile))
+	router.Path(route).Methods("DELETE").HandlerFunc(makeHttpHandler(httpDeleteNetProfile))
 
 	// Register network
 	route = "/api/networks/{key}/"
@@ -1345,6 +1393,10 @@ func ValidateEndpointGroup(obj *EndpointGroup) error {
 		return errors.New("groupName string invalid format")
 	}
 
+	if len(obj.NetProfile) > 64 {
+		return errors.New("netProfile string too long")
+	}
+
 	if len(obj.NetworkName) > 64 {
 		return errors.New("networkName string too long")
 	}
@@ -1628,6 +1680,266 @@ func ValidateGlobal(obj *Global) error {
 	vxlansMatch := regexp.MustCompile("^([0-9]{1,8}?-[0-9]{1,8}?)$")
 	if vxlansMatch.MatchString(obj.Vxlans) == false {
 		return errors.New("vxlans string invalid format")
+	}
+
+	return nil
+}
+
+// LIST REST call
+func httpListNetProfiles(w http.ResponseWriter, r *http.Request, vars map[string]string) (interface{}, error) {
+	log.Debugf("Received httpListNetProfiles: %+v", vars)
+
+	list := make([]*NetProfile, 0)
+	for _, obj := range collections.netProfiles {
+		list = append(list, obj)
+	}
+
+	// Return the list
+	return list, nil
+}
+
+// GET REST call
+func httpGetNetProfile(w http.ResponseWriter, r *http.Request, vars map[string]string) (interface{}, error) {
+	log.Debugf("Received httpGetNetProfile: %+v", vars)
+
+	key := vars["key"]
+
+	obj := collections.netProfiles[key]
+	if obj == nil {
+		log.Errorf("netProfile %s not found", key)
+		return nil, errors.New("netProfile not found")
+	}
+
+	// Return the obj
+	return obj, nil
+}
+
+// CREATE REST call
+func httpCreateNetProfile(w http.ResponseWriter, r *http.Request, vars map[string]string) (interface{}, error) {
+	log.Debugf("Received httpGetNetProfile: %+v", vars)
+
+	var obj NetProfile
+	key := vars["key"]
+
+	// Get object from the request
+	err := json.NewDecoder(r.Body).Decode(&obj)
+	if err != nil {
+		log.Errorf("Error decoding netProfile create request. Err %v", err)
+		return nil, err
+	}
+
+	// set the key
+	obj.Key = key
+
+	// Create the object
+	err = CreateNetProfile(&obj)
+	if err != nil {
+		log.Errorf("CreateNetProfile error for: %+v. Err: %v", obj, err)
+		return nil, err
+	}
+
+	// Return the obj
+	return obj, nil
+}
+
+// DELETE rest call
+func httpDeleteNetProfile(w http.ResponseWriter, r *http.Request, vars map[string]string) (interface{}, error) {
+	log.Debugf("Received httpDeleteNetProfile: %+v", vars)
+
+	key := vars["key"]
+
+	// Delete the object
+	err := DeleteNetProfile(key)
+	if err != nil {
+		log.Errorf("DeleteNetProfile error for: %s. Err: %v", key, err)
+		return nil, err
+	}
+
+	// Return the obj
+	return key, nil
+}
+
+// Create a netProfile object
+func CreateNetProfile(obj *NetProfile) error {
+	// Validate parameters
+	err := ValidateNetProfile(obj)
+	if err != nil {
+		log.Errorf("ValidateNetProfile retruned error for: %+v. Err: %v", obj, err)
+		return err
+	}
+
+	// Check if we handle this object
+	if objCallbackHandler.NetProfileCb == nil {
+		log.Errorf("No callback registered for netProfile object")
+		return errors.New("Invalid object type")
+	}
+
+	saveObj := obj
+
+	// Check if object already exists
+	if collections.netProfiles[obj.Key] != nil {
+		// Perform Update callback
+		err = objCallbackHandler.NetProfileCb.NetProfileUpdate(collections.netProfiles[obj.Key], obj)
+		if err != nil {
+			log.Errorf("NetProfileUpdate retruned error for: %+v. Err: %v", obj, err)
+			return err
+		}
+
+		// save the original object after update
+		saveObj = collections.netProfiles[obj.Key]
+	} else {
+		// save it in cache
+		collections.netProfiles[obj.Key] = obj
+
+		// Perform Create callback
+		err = objCallbackHandler.NetProfileCb.NetProfileCreate(obj)
+		if err != nil {
+			log.Errorf("NetProfileCreate retruned error for: %+v. Err: %v", obj, err)
+			delete(collections.netProfiles, obj.Key)
+			return err
+		}
+	}
+
+	// Write it to modeldb
+	err = saveObj.Write()
+	if err != nil {
+		log.Errorf("Error saving netProfile %s to db. Err: %v", saveObj.Key, err)
+		return err
+	}
+
+	return nil
+}
+
+// Return a pointer to netProfile from collection
+func FindNetProfile(key string) *NetProfile {
+	obj := collections.netProfiles[key]
+	if obj == nil {
+		return nil
+	}
+
+	return obj
+}
+
+// Delete a netProfile object
+func DeleteNetProfile(key string) error {
+	obj := collections.netProfiles[key]
+	if obj == nil {
+		log.Errorf("netProfile %s not found", key)
+		return errors.New("netProfile not found")
+	}
+
+	// Check if we handle this object
+	if objCallbackHandler.NetProfileCb == nil {
+		log.Errorf("No callback registered for netProfile object")
+		return errors.New("Invalid object type")
+	}
+
+	// Perform callback
+	err := objCallbackHandler.NetProfileCb.NetProfileDelete(obj)
+	if err != nil {
+		log.Errorf("NetProfileDelete retruned error for: %+v. Err: %v", obj, err)
+		return err
+	}
+
+	// delete it from modeldb
+	err = obj.Delete()
+	if err != nil {
+		log.Errorf("Error deleting netProfile %s. Err: %v", obj.Key, err)
+	}
+
+	// delete it from cache
+	delete(collections.netProfiles, key)
+
+	return nil
+}
+
+func (self *NetProfile) GetType() string {
+	return "netProfile"
+}
+
+func (self *NetProfile) GetKey() string {
+	return self.Key
+}
+
+func (self *NetProfile) Read() error {
+	if self.Key == "" {
+		log.Errorf("Empty key while trying to read netProfile object")
+		return errors.New("Empty key")
+	}
+
+	return modeldb.ReadObj("netProfile", self.Key, self)
+}
+
+func (self *NetProfile) Write() error {
+	if self.Key == "" {
+		log.Errorf("Empty key while trying to Write netProfile object")
+		return errors.New("Empty key")
+	}
+
+	return modeldb.WriteObj("netProfile", self.Key, self)
+}
+
+func (self *NetProfile) Delete() error {
+	if self.Key == "" {
+		log.Errorf("Empty key while trying to Delete netProfile object")
+		return errors.New("Empty key")
+	}
+
+	return modeldb.DeleteObj("netProfile", self.Key)
+}
+
+func restoreNetProfile() error {
+	strList, err := modeldb.ReadAllObj("netProfile")
+	if err != nil {
+		log.Errorf("Error reading netProfile list. Err: %v", err)
+	}
+
+	for _, objStr := range strList {
+		// Parse the json model
+		var netProfile NetProfile
+		err = json.Unmarshal([]byte(objStr), &netProfile)
+		if err != nil {
+			log.Errorf("Error parsing object %s, Err %v", objStr, err)
+			return err
+		}
+
+		// add it to the collection
+		collections.netProfiles[netProfile.Key] = &netProfile
+	}
+
+	return nil
+}
+
+// Validate a netProfile object
+func ValidateNetProfile(obj *NetProfile) error {
+	// Validate key is correct
+	keyStr := obj.TenantName + ":" + obj.ProfileName
+	if obj.Key != keyStr {
+		log.Errorf("Expecting NetProfile Key: %s. Got: %s", keyStr, obj.Key)
+		return errors.New("Invalid Key")
+	}
+
+	// Validate each field
+
+	if obj.DSCP == 0 {
+		obj.DSCP = 0
+	}
+
+	if obj.DSCP > 63 {
+		return errors.New("DSCP Value Out of bound")
+	}
+
+	if len(obj.Bandwidth) > 64 {
+		return errors.New("bandwidth string too long")
+	}
+
+	bandwidthMatch := regexp.MustCompile("^[1-9][0-9]* (k|m|g)bps$")
+	if bandwidthMatch.MatchString(obj.Bandwidth) == false {
+		return errors.New("bandwidth string invalid format")
+	}
+
+	if len(obj.ProfileName) > 64 {
+		return errors.New("profileName string too long")
 	}
 
 	return nil

@@ -52,6 +52,7 @@ func NewAPIController(router *mux.Router, storeURL string) *APIController {
 	contivModel.RegisterAppProfileCallbacks(ctrler)
 	contivModel.RegisterEndpointGroupCallbacks(ctrler)
 	contivModel.RegisterNetworkCallbacks(ctrler)
+	contivModel.RegisterNetProfileCallbacks(ctrler)
 	contivModel.RegisterPolicyCallbacks(ctrler)
 	contivModel.RegisterRuleCallbacks(ctrler)
 	contivModel.RegisterTenantCallbacks(ctrler)
@@ -642,6 +643,79 @@ func (ac *APIController) NetworkDelete(network *contivModel.Network) error {
 	if err != nil {
 		log.Errorf("Error deleting network %s. Err: %v", network.NetworkName, err)
 		return err
+	}
+
+	return nil
+}
+
+// NetProfileCreate creates the network profile
+func (ac *APIController) NetProfileCreate(profile *contivModel.NetProfile) error {
+	log.Infof("Received NetProfileCreate: %+v", profile)
+
+	/*	err := profile.Write()
+		if err != nil {
+			return err
+		}
+	*/
+	/*
+		// find the policy
+		policy := contivModel.FindPolicy(policyKey)
+		if policy == nil {
+			log.Errorf("Error finding policy %s", policyKey)
+			return core.Errorf("Policy not found")
+		}
+
+		// Trigger policyDB Update
+		err := master.PolicyAddRule(policy, rule)
+		if err != nil {
+			log.Errorf("Error adding rule %s to policy %s. Err: %v", rule.Key, policy.Key, err)
+			return err
+		}
+
+		// link the rule to policy
+		modeldb.AddLinkSet(&rule.LinkSets.Policies, policy)
+		modeldb.AddLinkSet(&policy.LinkSets.Rules, rule)
+		err = policy.Write()
+		if err != nil {
+			return err
+		}
+
+		// Update any affected app profiles
+		syncAppProfile(policy)
+	*/
+
+	return nil
+}
+
+// NetProfileUpdate updates the network profile
+func (ac *APIController) NetProfileUpdate(profile, params *contivModel.NetProfile) error {
+	log.Infof("Received NetProfileUpdate: %+v", profile)
+
+	/*profileKey := rule.TenantName + ":" + rule.PolicyName
+
+	if params.Bandwidth != "" {
+		profile.Bandwidth = params.Bandwidth
+	}
+	// TODO: convert to string
+	profile.DSCP = params.DSCP
+
+	// Trigger policyDB Update
+	err := master.PolicyAddRule(policy, rule)
+	if err != nil {
+		log.Errorf("Error adding rule %s to policy %s. Err: %v", rule.Key, policy.Key, err)
+		return err
+	}*/
+
+	return errors.New("Can not update a network profile after its created")
+}
+
+// NetProfileDelete deletes the network profile
+func (ac *APIController) NetProfileDelete(profile *contivModel.NetProfile) error {
+	log.Infof("Received NetProfileDelete: %+v", profile)
+
+	// Check if any endpoint group is using the NetProfile
+	if len(profile.LinkSets.EndpointGroups) != 0 {
+		return core.Errorf("NetProfile is being used")
 	}
 
 	return nil
