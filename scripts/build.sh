@@ -21,7 +21,8 @@ GIT_COMMIT=$(./scripts/getGitCommit.sh)
 
 echo $BUILD_VERSION >$VERSION_FILE
 
-GOGC=1500 go install -v \
+GOGC=1500 CGO_ENABLED=0 go install -v \
+	-a -installsuffix cgo \
 	-ldflags "-X $PKG_NAME.version=$BUILD_VERSION \
 	-X $PKG_NAME.buildTime=$BUILD_TIME \
 	-X $PKG_NAME.gitCommit=$GIT_COMMIT \
